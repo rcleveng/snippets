@@ -7,9 +7,10 @@ import (
 	"google.golang.org/api/servicecontrol/v1"
 	"log"
 	"time"
+	"github.com/satori/go.uuid"
 )
 
-func main() {
+func CreateService() (*servicecontrol.ServicesService, error) {
 	ctx := context.Background()
 	client, err := google.DefaultClient(ctx, servicecontrol.ServicecontrolScope)
 	if err != nil {
@@ -19,20 +20,34 @@ func main() {
 	service, err := servicecontrol.New(client)
 
 	if err != nil {
+		return nil, err
+	}
+
+	s := servicecontrol.NewServicesService(service)
+	return s, nil
+
+}
+
+func CreateCheckRequest(consumer_id string, op_name string) (*servicecontrol.CheckRequest) {
+	t := time.Now()
+	rfc3339 := t.Format(time.RFC3339)
+	u := uuid.NewV4()
+	op := servicecontrol.Operation{
+		ConsumerId:    consumer_id,
+		StartTime:     rfc3339,
+		OperationId:   u.String(),
+		OperationName: op_name}
+	return &servicecontrol.CheckRequest{Operation: &op}
+}
+
+func main() {
+        sc, err := CreateService()
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	sc := servicecontrol.NewServicesService(service)
-
-	t := time.Now()
-	rfc3339 := t.Format(time.RFC3339)
-	op := servicecontrol.Operation{
-		ConsumerId:    "project:project:rob-mst-201703",
-		StartTime:     rfc3339,
-		OperationId:   "8356d3c5-f9b5-4274-b4f9-079a3731e611",
-		OperationName: "ServiceControlTest"}
-	req := servicecontrol.CheckRequest{Operation: &op}
-	call := sc.Check("rob-mst.endpoints.rob-mst-201703.cloud.goog", &req)
+	req := CreateCheckRequest("project:project:rob-mst-201703", "ServiceControlTest")
+	call := sc.Check("rob-mst.endpoints.rob-mst-201703.cloud.goog", req)
 
 	response, err := call.Do()
 	if err != nil {
