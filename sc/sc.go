@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/satori/go.uuid"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/servicecontrol/v1"
 	"log"
 	"time"
-	"github.com/satori/go.uuid"
 )
 
 func CreateService() (*servicecontrol.ServicesService, error) {
@@ -28,7 +28,7 @@ func CreateService() (*servicecontrol.ServicesService, error) {
 
 }
 
-func CreateCheckRequest(consumer_id string, op_name string) (*servicecontrol.CheckRequest) {
+func CreateCheckRequest(consumer_id string, op_name string) *servicecontrol.CheckRequest {
 	t := time.Now()
 	rfc3339 := t.Format(time.RFC3339)
 	u := uuid.NewV4()
@@ -40,45 +40,50 @@ func CreateCheckRequest(consumer_id string, op_name string) (*servicecontrol.Che
 	return &servicecontrol.CheckRequest{Operation: &op}
 }
 
-func CreateReportRequest(consumer_id string, op_name string) (*servicecontrol.ReportRequest) {
+func CreateReportRequest(consumer_id string, op_name string) *servicecontrol.ReportRequest {
 	t := time.Now()
 	rfc3339 := t.Format(time.RFC3339)
 	u := uuid.NewV4()
-	op := servicecontrol.Operation{
-		ConsumerId:    consumer_id,
-		StartTime:     rfc3339,
-		EndTime:       rfc3339,
-		OperationId:   u.String(),
-		OperationName: op_name}
-	op.Labels = make(map[string]string, 7)
-	op.Labels["cloud.googleapis.com/location"] = "global"
-	op.Labels["serviceruntime.googleapis.com/api_version"] = "v1"
-	// This is service (with underscores v dots) + version (ditto) + '.' + method
-	op.Labels["serviceruntime.googleapis.com/api_method"] = "rob_mst_endpoints_rob_mst_201703_cloud_goog_1_0_0.Echo"
-	op.Labels["cloud.googleapis.com/project"] = "rob-mst-201703"
-	op.Labels["cloud.googleapis.com/service"] = "rob-mst.endpoints.rob-mst-201703.cloud.goog"
-	op.Labels["cloud.googleapis.com/uid"] = "92830528305210394"
+
+	labels := map[string]string{
+		"cloud.googleapis.com/location":             "global",
+		"serviceruntime.googleapis.com/api_version": "v1",
+		// This is service (with underscores v dots) + version (ditto) + '.' + method,
+		"serviceruntime.googleapis.com/api_method": "rob_mst_endpoints_rob_mst_201703_cloud_goog_1_0_0.Echo",
+		"cloud.googleapis.com/project":             "rob-mst-201703",
+		"cloud.googleapis.com/service":             "rob-mst.endpoints.rob-mst-201703.cloud.goog",
+		"cloud.googleapis.com/uid":                 "92830528305210394",
+	}
 
 	v := int64(23)
-	
-	op.MetricValueSets = []*servicecontrol.MetricValueSet{{
-	    MetricName: "serviceruntime.googleapis.com/api/consumer/request_count",
-	    MetricValues: []*servicecontrol.MetricValue{{
-	        Int64Value: &v,
-	    }},
+	m := []*servicecontrol.MetricValueSet{{
+		MetricName: "serviceruntime.googleapis.com/api/consumer/request_count",
+		MetricValues: []*servicecontrol.MetricValue{{
+			Int64Value: &v,
+		}},
 	}}
 
-	// I'm sure there's a better way but everything else I seemed to try gives
-	// compile errors like cannot use op (type servicecontrol.Operation) as type
-	// *servicecontrol.Operation in array or slice literal.	
-	ops := make([]*servicecontrol.Operation, 1);
-	ops[0] = &op
-	rr := servicecontrol.ReportRequest{Operations: ops}
-	return &rr
+	l := []*servicecontrol.LogEntry{{
+		Severity:    "INFO",
+		Name:        "endpoints_log",
+		TextPayload: "Anything you can do with bash, you can do with Go!",
+	}}
+
+	op := servicecontrol.Operation{
+		ConsumerId:      consumer_id,
+		StartTime:       rfc3339,
+		EndTime:         rfc3339,
+		OperationId:     u.String(),
+		OperationName:   op_name,
+		Labels:          labels,
+		MetricValueSets: m,
+		LogEntries:      l}
+
+	return &servicecontrol.ReportRequest{Operations: []*servicecontrol.Operation{&op}}
 }
 
 func main() {
-        sc, err := CreateService()
+	sc, err := CreateService()
 	if err != nil {
 		log.Fatal(err)
 	}
